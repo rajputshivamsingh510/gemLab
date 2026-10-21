@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+openpyxl
+pytest
+requests
+python-dotenv
+tzdata
+streamlit

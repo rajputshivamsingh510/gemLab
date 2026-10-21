@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reminder Control Room</title>
+<style>
+:root{--bg:#0e1117;--card:#161b24;--line:#262d3a;--text:#e6e9ef;--muted:#8b93a3;--accent:#4f8cff;
+--ok:#2ecc71;--warn:#f5a524;--bad:#ff5c5c;--info:#7aa2ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:20px} h2{margin:0 0 12px;font-size:16px}
+small,.muted{color:var(--muted)}
+main{max-width:1200px;margin:0 auto;padding:20px 24px 60px}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.badge.ok{color:var(--ok);border-color:var(--ok)} .badge.warn{color:var(--warn);border-color:var(--warn)} .badge.bad{color:var(--bad);border-color:var(--bad)}
+.banner{margin:14px 24px 0;padding:10px 14px;border-radius:8px;background:#3a2a07;border:1px solid var(--warn);color:#ffd88a}
+.banner.bad{background:#3a1010;border-color:var(--bad);color:#ffb3b3}
+nav{display:flex;gap:8px;padding:16px 24px 0;max-width:1200px;margin:0 auto}
+.tab{background:var(--card);color:var(--muted);border:1px solid var(--line);padding:8px 22px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.chip{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#11151c;cursor:pointer;color:var(--text)}
+.chip b{margin-left:6px}.chip.active{border-color:var(--accent);background:#1a2740}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;font-size:14px;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.tablewrap{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse} th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:#1b2230;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+td.msg{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.tag{padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600}
+.tag.ready,.tag.Sent{background:#12331f;color:var(--ok)} .tag.past,.tag.Approved,.tag.Sending{background:#3a2a07;color:var(--warn)}
+.tag.no_consent,.tag.No_consent,.tag.Pending_approval,.tag.Skipped{background:#222a38;color:var(--muted)} .tag.invalid,.tag.Failed{background:#3a1010;color:var(--bad)}
+.cd{font-variant-numeric:tabular-nums;font-weight:600;color:var(--info)} .cd.due{color:var(--warn)}
+.feed{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
+.feed li{padding:8px 4px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:baseline}
+.feed .ok{color:var(--ok)} .feed .bad{color:var(--bad)} .feed .skip{color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+input[type=text],select{background:#11151c;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px}
+.toast{position:fixed;right:20px;bottom:20px;background:#12331f;border:1px solid var(--ok);color:#baf5d0;padding:12px 16px;border-radius:10px;max-width:420px;display:none}
+.toast.bad{background:#3a1010;border-color:var(--bad);color:#ffb3b3}
+.stat{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:12px}.stat div{min-width:90px}.stat b{display:block;font-size:22px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>💬 Reminder Control Room</h1><small id="clock">&nbsp;</small></div>
+  <span id="senderBadge" class="badge">connecting…</span>
+</header>
+<div id="banner" class="banner" hidden></div>
+
+<nav>
+  <button class="tab active" data-view="current">Current</button>
+  <button class="tab" data-view="all">All</button>
+  <button class="tab" data-view="validate">Validate list</button>
+  <button class="tab" data-view="conn">Connections</button>
+</nav>
+
+<main>
+<!-- ================= CURRENT ================= -->
+<section id="view-current">
+  <div class="card">
+    <h2>1 · Upload &amp; check consent</h2>
+    <div id="drop" class="drop">Drop a CSV / XLSX here or click to choose<br><small>columns: name, telegram_chat_id, reminder_at, message, consent</small></div>
+    <p class="muted" style="margin:10px 0 0">Telegram delivers to a <b>chat ID</b>, not a phone number. A customer's chat ID only exists after they open
+      <span class="botlink">your bot</span> and press <b>Start</b>.</p>
+    <input id="file" type="file" accept=".csv,.xlsx" hidden>
+    <div id="previewBox" hidden>
+      <div class="chips" id="chips"></div>
+      <div class="tablewrap"><table><thead><tr><th>Line</th><th>Name</th><th>Chat ID</th><th>Time</th><th>Message</th><th>Consent</th><th>Check</th></tr></thead><tbody id="previewBody"></tbody></table></div>
+      <small id="previewNote" class="muted"></small>
+      <div class="row" style="margin-top:14px">
+        <button id="proceed" class="btn" disabled>Proceed</button>
+        <button id="cancel" class="btn ghost">Discard file</button>
+        <small id="fileName" class="muted"></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Scheduled — waiting to be sent</h2>
+    <div class="stat">
+      <div><b id="waitCount">0</b><small>waiting</small></div>
+      <div><b id="nextIn">—</b><small>next message in</small></div>
+      <div><b id="sentToday">0</b><small>sent today</small></div>
+      <div><b id="failToday">0</b><small>failed / skipped today</small></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Send at</th><th>Countdown</th><th>Name</th><th>Chat ID</th><th>Message</th></tr></thead><tbody id="waitBody"></tbody></table></div>
+    <small id="waitNote" class="muted"></small>
+  </div>
+
+  <div class="card">
+    <h2>3 · Live activity <small>(sent items leave the board above and are saved to the All records)</small></h2>
+    <ul class="feed" id="feed"></ul>
+  </div>
+</section>
+
+<!-- ================= ALL ================= -->
+<section id="view-all" hidden>
+  <div class="card">
+    <h2>All records</h2>
+    <div class="stat" id="allStats"></div>
+    <div class="row">
+      <select id="allStatus"></select>
+      <input id="allSearch" type="text" placeholder="Search name / chat id / message" size="34">
+      <a class="btn ghost" href="/download/customers" style="text-decoration:none">⬇ customers.csv</a>
+      <a class="btn ghost" href="/download/delivery_log" style="text-decoration:none">⬇ delivery_log.csv</a>
+    </div>
+    <div class="tablewrap" style="max-height:520px"><table><thead><tr><th>Name</th><th>Chat ID</th><th>Scheduled</th><th>Message</th><th>Consent</th><th>Status</th><th>Finished</th><th>Error</th></tr></thead><tbody id="allBody"></tbody></table></div>
+    <small id="allNote" class="muted"></small>
+  </div>
+</section>
+
+<!-- ================= VALIDATE LIST ================= -->
+<section id="view-validate" hidden>
+  <div class="card">
+    <h2>Validate customer list</h2>
+    <p class="muted" style="margin-top:0">Upload a CSV / XLSX with <code>name</code> and <code>phone</code> columns. Checks missing names, phone format and duplicates.</p>
+    <div id="vdrop" class="drop">Drop a CSV / XLSX here or click to choose</div>
+    <input id="vfile" type="file" accept=".csv,.xlsx" hidden>
+    <div id="vBox" hidden>
+      <div class="stat" id="vStats" style="margin-top:14px"></div>
+      <div class="tablewrap"><table><thead><tr><th>Line</th><th>Name</th><th>Phone (as given)</th><th>Normalized</th><th>Check</th></tr></thead><tbody id="vBody"></tbody></table></div>
+      <div class="row" style="margin-top:12px"><a id="vDownload" class="btn ghost" href="#" style="text-decoration:none">⬇ Download validation report</a><small id="vNote" class="muted"></small></div>
+      <small class="muted">This checks the number's format only. It does not confirm the number exists, is on Telegram, or has agreed to receive messages.</small>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONNECTIONS ================= -->
+<section id="view-conn" hidden>
+  <div class="card">
+    <h2>Telegram bot connection test</h2>
+    <p id="tgStatus" class="muted" style="margin-top:0">Checking…</p>
+    <p class="muted">The bot can only message people who have opened <span class="botlink">your bot</span> and pressed <b>Start</b>. It cannot look people up by phone number.
+      To find a chat ID, have the person press Start, then run <code>python get_telegram_chat_id.py</code>.</p>
+    <div class="row"><input id="tgChat" type="text" placeholder="Your Telegram chat ID, e.g. 123456789" size="34">
+      <input id="tgText" type="text" value="Hello! This is a test from my reminder automation app." size="52"></div>
+    <label class="row"><input id="tgConfirm" type="checkbox"> I confirm this is my own Telegram chat or a recipient who agreed to this test.</label>
+    <div class="row"><button id="tgSend" class="btn" disabled>Send Telegram test message</button><small id="tgResult"></small></div>
+  </div>
+
+  <div class="card">
+    <h2>WhatsApp <small>(preserved, currently blocked)</small></h2>
+    <p class="muted" style="margin-top:0">The WhatsApp sender is kept for future authorized access. Your Meta test account is restricted, so this panel is hidden by default.</p>
+    <label class="row"><input id="waShow" type="checkbox"> Show WhatsApp test panel (only if you have authorized working access)</label>
+    <div id="waBox" hidden>
+      <p id="waStatus" class="muted"></p>
+      <div class="row"><input id="waTo" type="text" placeholder="919876543210 (digits only, with country code)" size="40"></div>
+      <label class="row"><input id="waConfirm" type="checkbox"> I confirm this is my own approved WhatsApp test recipient.</label>
+      <div class="row"><button id="waSend" class="btn" disabled>Send WhatsApp hello_world template</button><small id="waResult"></small></div>
+    </div>
+  </div>
+</section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hms = ts => new Date(ts * 1000).toLocaleTimeString([], {hour12: false});
+const hm = ts => new Date(ts * 1000).toLocaleTimeString([], {hour12: false, hour: "2-digit", minute: "2-digit"});
+const STATES = {ready: "Ready", past: "Time passed", no_consent: "No consent", invalid: "Invalid"};
+let offsetMs = 0, view = "current", token = null, previewRows = [], previewFilter = "all", lastState = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+function toast(msg, bad) {
+  const t = $("#toast"); t.textContent = msg; t.className = "toast" + (bad ? " bad" : ""); t.style.display = "block";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 6000);
+}
+const now = () => (Date.now() + offsetMs) / 1000;
+function fmtCd(sec) {
+  if (sec <= 0) return "sending…";
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = Math.floor(sec % 60);
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
+
+const stat = (label, n) => `<div><b>${n || 0}</b><small>${label}</small></div>`;
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  view = b.dataset.view;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
+  ["current", "all", "validate", "conn"].forEach(v => $("#view-" + v).hidden = view !== v);
+  if (view === "all") loadAll();
+});
+
+/* ---------- upload & preview ---------- */
+function wireDrop(dropEl, inputEl, handler) {
+  dropEl.onclick = () => inputEl.click();
+  dropEl.ondragover = e => { e.preventDefault(); dropEl.classList.add("over"); };
+  dropEl.ondragleave = () => dropEl.classList.remove("over");
+  dropEl.ondrop = e => { e.preventDefault(); dropEl.classList.remove("over"); if (e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]); };
+  inputEl.onchange = () => { if (inputEl.files[0]) handler(inputEl.files[0]); };
+}
+const fileInput = $("#file");
+wireDrop($("#drop"), fileInput, f => handleFile(f));
+
+async function handleFile(f) {
+  try {
+    const j = await api("/api/preview", {method: "POST", headers: {"X-Filename": encodeURIComponent(f.name)}, body: f});
+    token = j.token; previewRows = j.rows; previewFilter = "all";
+    $("#fileName").textContent = j.filename;
+    $("#previewNote").textContent = j.truncated ? "Showing the first 500 rows; all rows are checked and will be processed." : "";
+    renderChips(j.counts); renderPreview();
+    const n = j.counts.ready + j.counts.past;
+    $("#proceed").disabled = n === 0; $("#proceed").textContent = n ? `Proceed — schedule ${n} message${n === 1 ? "" : "s"}` : "Nothing to schedule";
+    $("#previewBox").hidden = false;
+  } catch (e) { toast(e.message, true); }
+  fileInput.value = "";
+}
+function renderChips(c) {
+  const items = [["all", "All rows", c.total], ["ready", "Ready", c.ready], ["past", "Time passed", c.past],
+                 ["no_consent", "No consent", c.no_consent], ["invalid", "Invalid", c.invalid]];
+  $("#chips").innerHTML = items.map(([k, label, n]) =>
+    `<button class="chip ${previewFilter === k ? "active" : ""}" data-k="${k}">${label}<b>${n}</b></button>`).join("");
+  document.querySelectorAll("#chips .chip").forEach(b => b.onclick = () => { previewFilter = b.dataset.k; renderChips(c); renderPreview(); });
+}
+function renderPreview() {
+  const rows = previewRows.filter(r => previewFilter === "all" || r.state === previewFilter);
+  $("#previewBody").innerHTML = rows.map(r => `<tr><td>${r.line}</td><td>${esc(r.name)}</td><td>${esc(r.telegram_chat_id)}</td>
+    <td>${esc(r.reminder_at)}</td><td class="msg" title="${esc(r.message)}">${esc(r.message)}</td>
+    <td>${r.consent ? "1" : "0"}</td><td><span class="tag ${r.state}" title="${esc(r.note)}">${STATES[r.state]}</span> <small>${esc(r.note)}</small></td></tr>`).join("")
+    || `<tr><td colspan="7" class="muted">No rows in this group.</td></tr>`;
+}
+$("#cancel").onclick = () => { token = null; $("#previewBox").hidden = true; };
+$("#proceed").onclick = async () => {
+  $("#proceed").disabled = true;
+  try {
+    const j = await api("/api/proceed", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({token})});
+    token = null; $("#previewBox").hidden = true;
+    toast(`Scheduled ${j.scheduled} message(s). ${j.no_consent} without consent and ${j.invalid} invalid row(s) were not scheduled` +
+          (j.duplicates_ignored ? `; ${j.duplicates_ignored} duplicate(s) ignored.` : "."));
+    poll();
+  } catch (e) { toast(e.message, true); $("#proceed").disabled = false; }
+};
+
+/* ---------- live state ---------- */
+async function poll() {
+  try { const s = await api("/api/state"); offsetMs = s.now_ts * 1000 - Date.now(); lastState = s; renderState(s); }
+  catch (e) { const b = $("#senderBadge"); b.className = "badge bad"; b.textContent = "● server not reachable"; }
+}
+function renderState(s) {
+  const sd = s.sender, b = $("#senderBadge"), bn = $("#banner");
+  if (sd.error) { b.className = "badge bad"; b.textContent = "● sender error"; }
+  else if (sd.seconds_since_check === null || sd.seconds_since_check > 30) { b.className = "badge bad"; b.textContent = "● sender not running"; }
+  else if (sd.dry_run) { b.className = "badge warn"; b.textContent = "● DRY RUN — nothing is sent"; }
+  else { b.className = "badge ok"; b.textContent = `● LIVE · checked ${Math.round(sd.seconds_since_check)}s ago`; }
+  if (sd.dry_run) { bn.className = "banner"; bn.hidden = false;
+    bn.textContent = "DRY RUN is ON, so due reminders are NOT being sent. Put SCHEDULER_DRY_RUN=false in your .env file and restart server.py."; }
+  else if (sd.error) { bn.className = "banner bad"; bn.hidden = false; bn.textContent = "Sender error: " + sd.error; }
+  else bn.hidden = true;
+
+  $("#waitCount").textContent = s.waiting_total;
+  $("#sentToday").textContent = s.today.Sent || 0;
+  $("#failToday").textContent = (s.today.Failed || 0) + (s.today.Skipped || 0);
+  $("#waitBody").innerHTML = s.waiting.map(r => `<tr data-due="${r.due_ts}"><td>${r.due_ts ? hm(r.due_ts) : esc(r.reminder_at)}</td>
+    <td class="cd"></td><td>${esc(r.name)}</td><td>${esc(r.telegram_chat_id)}</td><td class="msg" title="${esc(r.message)}">${esc(r.message)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="muted">Nothing waiting. Upload a file and click Proceed.</td></tr>`;
+  $("#waitNote").textContent = s.waiting_total > s.waiting.length ? `Showing the next ${s.waiting.length} of ${s.waiting_total} waiting.` : "";
+  $("#feed").innerHTML = s.recent.map(r => {
+    const cls = r.status === "Sent" ? "ok" : r.status === "Failed" ? "bad" : "skip";
+    const icon = r.status === "Sent" ? "✓ Sent" : r.status === "Failed" ? "✗ Failed" : "⏭ Skipped";
+    const d = r.delay_s, timing = d === null ? "" : d <= 15 ? `on time (+${Math.max(d, 0)}s)` : `${d}s after schedule`;
+    return `<li><span class="${cls}">${icon}</span><span>${r.finished_ts ? hms(r.finished_ts) : ""}</span>
+      <span>${esc(r.name)} → ${esc(r.telegram_chat_id)}</span><small>scheduled ${r.due_ts ? hm(r.due_ts) : ""} · ${timing}</small>
+      ${r.error ? `<small class="bad">${esc(r.error)}</small>` : ""}</li>`;
+  }).join("") || `<li class="muted">Nothing sent yet.</li>`;
+  tick();
+}
+function tick() {
+  const t = new Date(Date.now() + offsetMs);
+  $("#clock").textContent = t.toLocaleDateString([], {weekday: "short", day: "numeric", month: "short"}) + " · " + t.toLocaleTimeString([], {hour12: false});
+  let next = null;
+  document.querySelectorAll("#waitBody tr[data-due]").forEach(tr => {
+    const left = Number(tr.dataset.due) - now(), c = tr.querySelector(".cd");
+    c.textContent = fmtCd(left); c.classList.toggle("due", left <= 0);
+    if (next === null || left < next) next = left;
+  });
+  $("#nextIn").textContent = next === null ? "—" : fmtCd(next);
+}
+setInterval(tick, 1000); setInterval(poll, 2000); poll();
+
+/* ---------- all records ---------- */
+const STATUS_OPTS = ["All", "Pending approval", "Approved", "Sent", "Failed", "Skipped", "No consent"];
+$("#allStatus").innerHTML = STATUS_OPTS.map(o => `<option>${o}</option>`).join("");
+let allTimer = null;
+$("#allStatus").onchange = loadAll;
+$("#allSearch").oninput = () => { clearTimeout(allTimer); allTimer = setTimeout(loadAll, 300); };
+async function loadAll() {
+  try {
+    const q = new URLSearchParams({status: $("#allStatus").value, q: $("#allSearch").value});
+    const j = await api("/api/all?" + q), c = j.counts;
+    $("#allStats").innerHTML = stat("Sent", c.Sent) + stat("Waiting", (c.Approved || 0) + (c.Sending || 0)) + stat("Pending approval", c["Pending approval"]) +
+      stat("Failed / skipped", (c.Failed || 0) + (c.Skipped || 0)) + stat("No consent", c["No consent"]);
+    $("#allBody").innerHTML = j.rows.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.telegram_chat_id)}</td><td>${esc(r.reminder_at)}</td>
+      <td class="msg" title="${esc(r.message)}">${esc(r.message)}</td><td>${r.consent ? 1 : 0}</td>
+      <td><span class="tag ${esc(r.status).replace(/\s+/g,"_")}">${esc(r.status)}</span></td><td>${esc(r.finished_at || "")}</td><td>${esc(r.error || "")}</td></tr>`).join("")
+      || `<tr><td colspan="8" class="muted">No records match.</td></tr>`;
+    $("#allNote").textContent = `Showing the newest ${j.rows.length} of ${j.total} matching record(s). Download customers.csv for the complete list.`;
+  } catch (e) { toast(e.message, true); }
+}
+setInterval(() => { if (view === "all" && document.activeElement !== $("#allSearch")) loadAll(); }, 10000);
+
+/* ---------- validate list ---------- */
+wireDrop($("#vdrop"), $("#vfile"), handleValidate);
+async function handleValidate(f) {
+  try {
+    const j = await api("/api/validate-customers", {method: "POST", headers: {"X-Filename": encodeURIComponent(f.name)}, body: f});
+    $("#vStats").innerHTML = stat("Total records", j.total) + stat("Valid", j.valid) + stat("Needs review", j.needs_review);
+    $("#vBody").innerHTML = j.rows.map(r => `<tr><td>${r.line}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td><td>${esc(r.normalized_phone)}</td>
+      <td><span class="tag ${r.status === "Valid" ? "ready" : "invalid"}">${esc(r.status)}</span></td></tr>`).join("");
+    $("#vDownload").href = "/download/validation/" + j.token;
+    $("#vNote").textContent = j.truncated ? "Showing the first 500 rows; the downloaded report has all rows." : "";
+    $("#vBox").hidden = false;
+  } catch (e) { toast(e.message, true); }
+  $("#vfile").value = "";
+}
+
+/* ---------- connections ---------- */
+let cfg = {};
+async function loadConfig() {
+  try {
+    cfg = await api("/api/config");
+    const link = cfg.bot_username ? `<a href="https://t.me/${esc(cfg.bot_username)}" target="_blank" rel="noopener" style="color:var(--accent)">@${esc(cfg.bot_username)}</a>` : "your bot";
+    document.querySelectorAll(".botlink").forEach(el => el.innerHTML = link);
+    $("#tgStatus").textContent = cfg.telegram_configured
+      ? "Bot token found in .env" + (cfg.bot_username ? " — bot is @" + cfg.bot_username + "." : ".")
+      : "TELEGRAM_BOT_TOKEN is missing. Add it to your .env file and restart server.py.";
+    $("#waStatus").textContent = cfg.whatsapp_configured ? "WhatsApp credentials found in .env." : "WhatsApp credentials are not configured in .env.";
+  } catch (e) { $("#tgStatus").textContent = "Could not read the server configuration."; }
+}
+loadConfig();
+function syncTg() { $("#tgSend").disabled = !($("#tgChat").value.trim() && $("#tgConfirm").checked); }
+["input", "change"].forEach(ev => { $("#tgChat").addEventListener(ev, syncTg); $("#tgConfirm").addEventListener(ev, syncTg); });
+function result(el, msg, bad) { el.textContent = msg; el.style.color = bad ? "var(--bad)" : "var(--ok)"; }
+$("#tgSend").onclick = async () => {
+  $("#tgSend").disabled = true; result($("#tgResult"), "Sending…");
+  try {
+    const j = await api("/api/test-telegram", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({chat_id: $("#tgChat").value, text: $("#tgText").value, confirm: $("#tgConfirm").checked})});
+    result($("#tgResult"), `Telegram accepted the message (id ${j.message_id}). Acceptance does not guarantee it was read.`);
+  } catch (e) { result($("#tgResult"), e.message, true); }
+  syncTg();
+};
+$("#waShow").onchange = () => $("#waBox").hidden = !$("#waShow").checked;
+function syncWa() { $("#waSend").disabled = !($("#waTo").value.trim() && $("#waConfirm").checked); }
+["input", "change"].forEach(ev => { $("#waTo").addEventListener(ev, syncWa); $("#waConfirm").addEventListener(ev, syncWa); });
+$("#waSend").onclick = async () => {
+  $("#waSend").disabled = true; result($("#waResult"), "Sending…");
+  try {
+    const j = await api("/api/test-whatsapp", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({recipient: $("#waTo").value, confirm: $("#waConfirm").checked})});
+    result($("#waResult"), `Meta accepted the request (id ${j.message_id}). Delivery is not guaranteed.`);
+  } catch (e) { result($("#waResult"), e.message, true); }
+  syncWa();
+};
+</script>
+</body>
+</html>
